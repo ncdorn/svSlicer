@@ -42,7 +42,8 @@ cmake --build .
 cmake --install .
 ```
 
-> For macOS, LLVM is required. It can be installed using `brew install llvm`.
+> For macOS, the OpenMP runtime is required. It can be installed using
+> `brew install libomp` (the build picks it up automatically via Homebrew).
 
 ## Run
 
@@ -68,8 +69,10 @@ cells for 200 timesteps using two 12-core Intel Xeon Gold 5118 CPUs.
 
 ## Development
 
-`clang-format` is used to ensure consistent formatting throughout the code. Use
-the following code to automatically apply the right format to your code changes:
+`clang-format` is used to ensure consistent formatting throughout the code. The
+CI pins version 20.1.7 (`pipx install clang-format==20.1.7`); use the same
+version locally to avoid formatting differences between clang-format releases.
+Apply the right format to your code changes with:
 
 ```
 clang-format -i --style=file:.clang_format src/main.cpp
