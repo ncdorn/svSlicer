@@ -420,6 +420,9 @@ int main(int argc, char* argv[])
     // that no VTK object is shared between threads. A shallow copy is not
     // enough, because it shares the points and point data arrays.
     int num_threads = omp_get_max_threads();
+    std::cout << "Using " << num_threads << " thread(s), "
+              << result_unstructured_grid->GetActualMemorySize() / 1024.0
+              << " MB per copy of the 3D result" << std::endl;
     std::vector<vtkSmartPointer<vtkUnstructuredGrid>> thread_grids(num_threads);
     thread_grids[0] = result_unstructured_grid;
     for (int t = 1; t < num_threads; t++)
@@ -427,10 +430,6 @@ int main(int argc, char* argv[])
         thread_grids[t] = vtkSmartPointer<vtkUnstructuredGrid>::New();
         thread_grids[t]->DeepCopy(result_unstructured_grid);
     }
-    std::cout << "Using " << num_threads << " thread(s), "
-              << result_unstructured_grid->GetActualMemorySize() / 1024
-              << " MB per copy of the 3D result" << std::endl;
-
     // Start parallel extraction
     std::cout << "Extract slices" << std::endl;
     auto slice_start = std::chrono::high_resolution_clock::now();
@@ -603,14 +602,14 @@ int main(int argc, char* argv[])
                     std::vector<double> flux(num_points_slice);
                     for (int j = 0; j < num_points_slice; j++)
                     {
-                        double vel[3];
-                        slice->GetPointData()
-                            ->GetArray(point_array_idx)
-                            ->GetTuple(j, vel);
+                        // Read the first three components one at a time, so an
+                        // array with more components cannot overflow a buffer.
+                        vtkDataArray* vel =
+                            slice->GetPointData()->GetArray(point_array_idx);
                         double curflux = 0.0;
                         for (int k = 0; k < 3; k++)
                         {
-                            curflux += vel[k] * normal[k];
+                            curflux += vel->GetComponent(j, k) * normal[k];
                         }
                         flux[j] = curflux;
                     }
@@ -647,6 +646,19 @@ int main(int argc, char* argv[])
                 {
                     slice_error = "Slice at centerline point " +
                                   std::to_string(i) + " failed: " + e.what();
+                    slice_failed = true;
+                }
+            }
+        }
+        catch (...)
+        {
+#pragma omp critical(error)
+            {
+                if (!slice_failed)
+                {
+                    slice_error = "Slice at centerline point " +
+                                  std::to_string(i) +
+                                  " failed with an unknown error";
                     slice_failed = true;
                 }
             }
