@@ -371,9 +371,20 @@ int main(int argc, char* argv[])
     // Get centerline data.
     int num_centerline_points = centerline_polydata->GetNumberOfPoints();
     auto centerline_points = centerline_polydata->GetPoints();
-    auto centerline_normals = vtkDoubleArray::SafeDownCast(
+    // The normals are read through the generic vtkDataArray interface, so
+    // that both Float32 and Float64 arrays are accepted.
+    vtkDataArray* centerline_normals =
         centerline_polydata->GetPointData()->GetArray(
-            "CenterlineSectionNormal"));
+            "CenterlineSectionNormal");
+    if (centerline_normals == nullptr ||
+        centerline_normals->GetNumberOfComponents() != 3)
+    {
+        std::cerr << "ERROR: Centerline file '" << centerline_file_name
+                  << "' has no 3-component 'CenterlineSectionNormal' point "
+                     "data array"
+                  << std::endl;
+        return EXIT_FAILURE;
+    }
 
     // Prepare pressure and velocity arrays
     int num_point_arrays =
