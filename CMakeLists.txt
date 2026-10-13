@@ -48,19 +48,35 @@ endif()
 
 find_package(OpenMP REQUIRED)
 
-# VTK 9 requires the used modules to be requested explicitly, otherwise
-# VTK_LIBRARIES is left empty and neither the headers nor the module autoinit
-# are wired up.
-find_package(VTK REQUIRED COMPONENTS
-    CommonCore
-    CommonDataModel
-    FiltersCore
-    IOXML)
+# Locate VTK first without components to learn its version: VTK < 9 prefixes
+# module names with "vtk" and uses VTK_USE_FILE instead of
+# vtk_module_autoinit.
+find_package(VTK REQUIRED)
+if(VTK_VERSION VERSION_LESS "8.90")
+    find_package(VTK REQUIRED COMPONENTS
+        vtkCommonCore
+        vtkCommonDataModel
+        vtkFiltersCore
+        vtkIOXML)
+    include(${VTK_USE_FILE})
+else()
+    # VTK 9 requires the used modules to be requested explicitly, otherwise
+    # VTK_LIBRARIES is left empty and neither the headers nor the module
+    # autoinit are wired up.
+    find_package(VTK REQUIRED COMPONENTS
+        CommonCore
+        CommonDataModel
+        FiltersCore
+        IOXML)
+endif()
+message(STATUS "Using VTK ${VTK_VERSION}")
 
 add_executable(svslicer src/main.cpp)
 target_link_libraries(svslicer PRIVATE ${VTK_LIBRARIES} OpenMP::OpenMP_CXX)
 
 # VTK 9 uses autoinit modules; this registers the required factory objects.
-vtk_module_autoinit(TARGETS svslicer MODULES ${VTK_LIBRARIES})
+if(NOT VTK_VERSION VERSION_LESS "8.90")
+    vtk_module_autoinit(TARGETS svslicer MODULES ${VTK_LIBRARIES})
+endif()
 
 install(TARGETS svslicer DESTINATION bin)

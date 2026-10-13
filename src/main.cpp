@@ -8,6 +8,7 @@
 #include <vtkCleanPolyData.h>
 #include <vtkCutter.h>
 #include <vtkDoubleArray.h>
+#include <vtkIdList.h>
 #include <vtkPlane.h>
 #include <vtkPointData.h>
 #include <vtkPolyDataConnectivityFilter.h>
@@ -203,14 +204,19 @@ double compute_slice_area(vtkSmartPointer<vtkPolyData> slice,
     double total_area = 0.0;
     int numcells = polys->GetNumberOfCells();
     area_of_cells_in_slice.resize(numcells);
+    auto cell_points = vtkSmartPointer<vtkIdList>::New();
 
-    // Loop over all cells in slice
+    // Loop over all cells in slice. The sequential traversal is used instead
+    // of GetCellAtId, which is not available in VTK < 9.
+    polys->InitTraversal();
     for (int icell = 0; icell < numcells; icell++)
     {
-        // Extract points of the
-        vtkIdType cell_size;
-        const vtkIdType* cell_points;
-        polys->GetCellAtId(icell, cell_size, cell_points);
+        // Extract points of the cell
+        if (!polys->GetNextCell(cell_points))
+        {
+            throw std::runtime_error("Failed to traverse slice cells.");
+        }
+        vtkIdType cell_size = cell_points->GetNumberOfIds();
 
         // From now on, we assume that the elements are triangles (true for
         // tetrahedral mesh)
@@ -223,9 +229,9 @@ double compute_slice_area(vtkSmartPointer<vtkPolyData> slice,
         double p0[3];
         double p1[3];
         double p2[3];
-        slice->GetPoints()->GetPoint(cell_points[0], p0);
-        slice->GetPoints()->GetPoint(cell_points[1], p1);
-        slice->GetPoints()->GetPoint(cell_points[2], p2);
+        slice->GetPoints()->GetPoint(cell_points->GetId(0), p0);
+        slice->GetPoints()->GetPoint(cell_points->GetId(1), p1);
+        slice->GetPoints()->GetPoint(cell_points->GetId(2), p2);
         double cell_area = vtkTriangle::TriangleArea(p0, p1, p2);
 
         // Add cell area to list of cell areas and add to total slice area
@@ -249,18 +255,24 @@ double integrate_on_slice(vtkSmartPointer<vtkPolyData> slice,
 {
     // Sum of the integrated quantity of interest for each cell
     double sum = 0;
+    auto polys = slice->GetPolys();
+    auto cell_points = vtkSmartPointer<vtkIdList>::New();
 
     // Loop over all cells
-    for (int j = 0; j < slice->GetPolys()->GetNumberOfCells(); j++)
+    polys->InitTraversal();
+    for (int j = 0; j < polys->GetNumberOfCells(); j++)
     {
         // Extract the points belonging to the selected cell
-        vtkIdType cell_size;
-        const vtkIdType* cell_points;
-        slice->GetPolys()->GetCellAtId(j, cell_size, cell_points);
+        if (!polys->GetNextCell(cell_points))
+        {
+            throw std::runtime_error("Failed to traverse slice cells.");
+        }
+        vtkIdType cell_size = cell_points->GetNumberOfIds();
 
         // Determine mean of quantity of all cell points
         double cur_sum = 0.0;
-        for (int k = 0; k < cell_size; k++) cur_sum += fun(cell_points[k]);
+        for (vtkIdType k = 0; k < cell_size; k++)
+            cur_sum += fun(cell_points->GetId(k));
 
         // Add cell value times the cell area to the total sum
         sum += area_of_cells_in_slice[j] * (cur_sum) / cell_size;
