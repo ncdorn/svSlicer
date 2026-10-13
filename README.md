@@ -51,6 +51,24 @@ cmake --install .
 OMP_NUM_THREADS=<NUM_THREADS> svslicer <path/to/3d_result.vtu> <path/to/centerline.vtp> <path/to/output_file.vtp>
 ```
 
+Each OpenMP thread slices its own copy of the 3D result, so memory use grows by
+about one result mesh per additional thread.
+
+## Test
+
+After building, run the regression test from the build directory:
+
+```bash
+ctest --output-on-failure
+```
+
+It generates a synthetic tube with linear velocity and pressure fields, runs
+svSlicer single-threaded and five times with 8 threads, and checks that every
+output matches the analytic flow and pressure and is bitwise identical to the
+single-threaded output. Use `-DSVSLICER_TEST_THREADS=<n>` and
+`-DSVSLICER_TEST_REPEATS=<n>` to change the thread count and repeats, or
+`-DSVSLICER_BUILD_TESTS=OFF` to skip building the test.
+
 ## Estimated runtime
 
 Runtime statistics for a case with 3619 slices of a 3D mesh with 1.6 million
@@ -75,7 +93,7 @@ version locally to avoid formatting differences between clang-format releases.
 Apply the right format to your code changes with:
 
 ```
-clang-format -i --style=file:.clang_format src/main.cpp
+clang-format -i --style=file:.clang_format src/main.cpp tests/*.cpp
 ```
 
 This format is also enforced for pull requests to be allowed.
