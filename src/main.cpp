@@ -18,6 +18,7 @@
 #include <vtkXMLPolyDataWriter.h>
 #include <vtkXMLUnstructuredGridReader.h>
 
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
@@ -30,19 +31,31 @@
 #include <vector>
 
 /**
- * @brief Check if given string starts with a certain prefix
+ * @brief Check if given string starts with a certain prefix, ignoring case
+ *
+ * Case is ignored so that both svSolver ("velocity", "pressure") and
+ * svMultiPhysics ("Velocity", "Pressure") result arrays are recognized.
  *
  * @param string The string to check for the given prefix
  * @param prefix The prefix
  * @return true If string starts with the prefix
  * @return false If string does not start with the prefix
  */
-bool starts_with(std::string& string, std::string prefix)
+bool starts_with(const std::string& string, const std::string& prefix)
 {
-    if (string.find(prefix) == 0)
-        return true;
-    else
+    if (string.size() < prefix.size())
+    {
         return false;
+    }
+    for (size_t i = 0; i < prefix.size(); i++)
+    {
+        if (std::tolower(static_cast<unsigned char>(string[i])) !=
+            std::tolower(static_cast<unsigned char>(prefix[i])))
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 /**
