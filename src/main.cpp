@@ -25,6 +25,7 @@
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -386,7 +387,10 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    // Prepare pressure and velocity arrays
+    // Prepare pressure and velocity arrays. The threads write their results
+    // directly into the raw array memory (each thread a different index)
+    // rather than through VTK accessors.
+    std::map<std::string, double*> output_values;
     int num_point_arrays =
         result_unstructured_grid->GetPointData()->GetNumberOfArrays();
     for (int point_array_idx = 0; point_array_idx < num_point_arrays;
@@ -402,8 +406,29 @@ int main(int argc, char* argv[])
             array->SetNumberOfComponents(1);
             array->SetNumberOfTuples(num_centerline_points);
             centerline_polydata->GetPointData()->AddArray(array);
+            output_values[name] = array->GetPointer(0);
         }
     }
+
+    // vtkCutter must not be run concurrently on a shared input. VTK 7.1
+    // evaluates the cut function through vtkDataSet::GetPoint(vtkIdType),
+    // which returns a pointer into a tuple buffer that belongs to the points
+    // array and is shared by all callers, and every cutter also writes
+    // pipeline information and cached bounds into its input. Give every
+    // thread its own deep copy of the grid (thread 0 uses the original), so
+    // that no VTK object is shared between threads. A shallow copy is not
+    // enough, because it shares the points and point data arrays.
+    int num_threads = omp_get_max_threads();
+    std::vector<vtkSmartPointer<vtkUnstructuredGrid>> thread_grids(num_threads);
+    thread_grids[0] = result_unstructured_grid;
+    for (int t = 1; t < num_threads; t++)
+    {
+        thread_grids[t] = vtkSmartPointer<vtkUnstructuredGrid>::New();
+        thread_grids[t]->DeepCopy(result_unstructured_grid);
+    }
+    std::cout << "Using " << num_threads << " thread(s), "
+              << result_unstructured_grid->GetActualMemorySize() / 1024
+              << " MB per copy of the 3D result" << std::endl;
 
     // Start parallel extraction
     std::cout << "Extract slices" << std::endl;
@@ -420,7 +445,11 @@ int main(int argc, char* argv[])
             my_slice = num_slices_processed;
         }
 
-        // Extract current position
+        // Grid owned by this thread
+        vtkUnstructuredGrid* grid = thread_grids[omp_get_thread_num()];
+
+        // Extract current position. The centerline is shared, but only read
+        // through the accessors that copy into a caller-provided buffer.
         double position1[3];
         double normal1[3];
         centerline_points->GetPoint(i, position1);
@@ -511,7 +540,7 @@ int main(int argc, char* argv[])
 
             auto cutter = vtkSmartPointer<vtkCutter>::New();
             cutter->SetCutFunction(plane);
-            cutter->SetInputData(result_unstructured_grid);
+            cutter->SetInputData(grid);
             cutter->Update();
             slice = cutter->GetOutput();
 
@@ -560,9 +589,10 @@ int main(int argc, char* argv[])
                 std::vector<double> flux(num_points_slice);
                 for (int j = 0; j < num_points_slice; j++)
                 {
-                    double* vel = slice->GetPointData()
-                                      ->GetArray(point_array_idx)
-                                      ->GetTuple3(j);
+                    double vel[3];
+                    slice->GetPointData()
+                        ->GetArray(point_array_idx)
+                        ->GetTuple(j, vel);
                     double curflux = 0.0;
                     for (int k = 0; k < 3; k++)
                     {
@@ -572,21 +602,16 @@ int main(int argc, char* argv[])
                 }
 
                 // Integrate flux over slice
-                double result[1];
-                result[0] = integrate_on_slice(slice, area_of_cells_in_slice,
-                                               [&](vtkIdType index) -> double
-                                               { return flux[index]; });
-                centerline_polydata->GetPointData()
-                    ->GetArray(name.c_str())
-                    ->SetTuple(i, result);
+                output_values.at(name)[i] = integrate_on_slice(
+                    slice, area_of_cells_in_slice,
+                    [&](vtkIdType index) -> double { return flux[index]; });
             }
 
             // Integrate pressure
             if (starts_with(name, "pressure"))
             {
                 // Integrate pressure over slice area
-                double result[1];
-                result[0] =
+                double result =
                     integrate_on_slice(slice, area_of_cells_in_slice,
                                        [&](vtkIdType index) -> double
                                        {
@@ -594,10 +619,7 @@ int main(int argc, char* argv[])
                                                ->GetArray(point_array_idx)
                                                ->GetTuple1(index);
                                        });
-                result[0] *= slice_area_inv;
-                centerline_polydata->GetPointData()
-                    ->GetArray(name.c_str())
-                    ->SetTuple(i, result);
+                output_values.at(name)[i] = result * slice_area_inv;
             }
         }
         std::cout << "Completed slice " << my_slice << "/"
