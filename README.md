@@ -76,8 +76,8 @@ ctest --output-on-failure
 
 It generates a synthetic tube with linear velocity and pressure fields, runs
 svSlicer single-threaded and five times with 8 threads, and checks that every
-output matches the analytic flow and pressure and is bitwise identical to the
-single-threaded output. Additional checks cover invalid velocity component
+output matches the analytic flow and pressure and agrees with the
+single-threaded output to 1e-12 relative. Additional checks cover invalid velocity component
 counts, four-component velocities, single-point centerlines, and OpenMP thread
 limits. Use `-DSVSLICER_TEST_THREADS=<n>` and
 `-DSVSLICER_TEST_REPEATS=<n>` to change the thread count and repeats, or

@@ -56,6 +56,11 @@ const double pressure_gradient = 400.0;
 // Relative tolerance for the analytic check
 const double analytic_tolerance = 1e-9;
 
+// Relative tolerance between the multithreaded and single-threaded results.
+// It allows only summation-order rounding (a few 1e-16); the race on a
+// shared input grid produced errors of 1e-3 and more.
+const double compare_tolerance = 1e-12;
+
 /**
  * @brief Check if the column of hexahedra at (i, j) is inside the tube
  */
@@ -278,7 +283,7 @@ int compare(const std::string& reference_file, const std::string& output_file)
         return EXIT_FAILURE;
     }
 
-    // Results must be bitwise identical to the reference.
+    // Results must agree with the reference to rounding.
     int num_failed = 0;
     double max_rel_diff = 0.0;
     for (auto name : {"Velocity", "Pressure"})
@@ -293,11 +298,10 @@ int compare(const std::string& reference_file, const std::string& output_file)
             bool same_point = a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
             double r = ref->GetTuple1(i);
             double o = out->GetTuple1(i);
-            if (!same_point || r != o)
+            double rel_diff = std::abs(o - r) / std::max(std::abs(r), 1e-300);
+            max_rel_diff = std::max(max_rel_diff, rel_diff);
+            if (!same_point || !(rel_diff <= compare_tolerance))
             {
-                double rel_diff =
-                    std::abs(o - r) / std::max(std::abs(r), 1e-300);
-                max_rel_diff = std::max(max_rel_diff, rel_diff);
                 if (num_failed < 10)
                 {
                     std::cerr << std::setprecision(17) << name << " at point "
@@ -317,8 +321,9 @@ int compare(const std::string& reference_file, const std::string& output_file)
                   << std::endl;
         return EXIT_FAILURE;
     }
-    std::cout << "'" << output_file << "' is identical to '" << reference_file
-              << "'" << std::endl;
+    std::cout << "'" << output_file << "' matches '" << reference_file
+              << "' (max relative difference " << max_rel_diff << ")"
+              << std::endl;
     return EXIT_SUCCESS;
 }
 }  // namespace

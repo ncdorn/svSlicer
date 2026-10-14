@@ -15,6 +15,7 @@
 #include <vtkSMPTools.h>
 #include <vtkTriangle.h>
 #include <vtkUnstructuredGrid.h>
+#include <vtkVersionMacros.h>
 #include <vtkXMLPolyDataReader.h>
 #include <vtkXMLPolyDataWriter.h>
 #include <vtkXMLUnstructuredGridReader.h>
@@ -434,11 +435,20 @@ int main(int argc, char* argv[])
     int num_threads =
         std::max(1, std::min(omp_get_max_threads(), num_centerline_points));
 
-    // The slices are processed in parallel by OpenMP, so keep VTK's own SMP
-    // backend (TBB or std::thread in some VTK 9 builds) single-threaded.
-    // Inside each cut its threads would oversubscribe the cores, and its
-    // thread-local merging makes the order of the slice triangles, and with
-    // it the floating-point sums, depend on thread scheduling.
+    // The slices are processed in parallel by OpenMP, so VTK must not run
+    // its own SMP threads (TBB or std::thread in some VTK 9 builds) inside
+    // each cut. They oversubscribe the cores, and their scheduling changes
+    // the order of the slice triangles and with it the floating-point sums.
+    // Limiting TBB to one thread is not enough, because other OpenMP threads
+    // can still execute parts of a cut, so use the Sequential backend where
+    // it can be selected at run time (VTK >= 9.1).
+#if VTK_MAJOR_VERSION > 9 || (VTK_MAJOR_VERSION == 9 && VTK_MINOR_VERSION >= 1)
+    if (!vtkSMPTools::SetBackend("Sequential"))
+    {
+        std::cerr << "WARNING: could not select VTK's Sequential SMP backend; "
+                  << "using " << vtkSMPTools::GetBackend() << std::endl;
+    }
+#endif
     vtkSMPTools::Initialize(1);
     std::vector<vtkSmartPointer<vtkUnstructuredGrid>> thread_grids;
 

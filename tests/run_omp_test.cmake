@@ -2,8 +2,9 @@
 #
 # Runs svSlicer on a synthetic tube once single-threaded and repeatedly with
 # OMP_NUM_THREADS threads. Every output must match the analytic solution and
-# be bitwise identical to the single-threaded output. Concurrent use of a
-# shared VTK dataset by the threads corrupts the results or crashes.
+# agree with the single-threaded output to 1e-12 relative (summation-order
+# rounding only). Concurrent use of a shared VTK dataset by the threads
+# corrupts the results by 1e-3 and more, or crashes.
 #
 # Required variables: SVSLICER, TEST_UTILS, WORK_DIR, THREADS, REPEATS
 
@@ -49,7 +50,7 @@ foreach(repeat RANGE 1 ${REPEATS})
     run_checked("${TEST_UTILS}" compare "${REFERENCE}" "${output_file}")
 endforeach()
 
-message(STATUS "${REPEATS} runs with ${THREADS} threads are identical to the "
+message(STATUS "${REPEATS} runs with ${THREADS} threads match the "
                "single-threaded run and match the analytic solution")
 
 # A runtime thread limit must reduce the number of grid copies as well.
