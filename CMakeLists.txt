@@ -92,6 +92,13 @@ if(SVSLICER_BUILD_TESTS)
             -DTHREADS=${SVSLICER_TEST_THREADS}
             -DREPEATS=${SVSLICER_TEST_REPEATS}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_omp_test.cmake)
+
+    add_test(NAME velocity_components_and_thread_cap
+        COMMAND ${CMAKE_COMMAND}
+            -DSVSLICER=$<TARGET_FILE:svslicer>
+            -DTEST_UTILS=$<TARGET_FILE:svslicer_test_utils>
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test_edge_cases
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_edge_tests.cmake)
 endif()
 
 # VTK 9 uses autoinit modules; this registers the required factory objects.

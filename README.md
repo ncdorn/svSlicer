@@ -51,8 +51,14 @@ cmake --install .
 OMP_NUM_THREADS=<NUM_THREADS> svslicer <path/to/3d_result.vtu> <path/to/centerline.vtp> <path/to/output_file.vtp>
 ```
 
-Each OpenMP thread slices its own copy of the 3D result, so memory use grows by
-about one result mesh per additional thread.
+Velocity point arrays (names starting with `velocity`, ignoring case) must
+have at least three components; arrays with fewer components cause an error.
+When an array has more than three components, the first three are used.
+
+Each participating OpenMP thread slices its own copy of the 3D result, so
+memory use grows by about one result mesh per additional thread. The thread
+count is capped by the number of centerline points, and grid copies are
+allocated only for the team actually created by OpenMP.
 
 ## Test
 
@@ -65,7 +71,9 @@ ctest --output-on-failure
 It generates a synthetic tube with linear velocity and pressure fields, runs
 svSlicer single-threaded and five times with 8 threads, and checks that every
 output matches the analytic flow and pressure and is bitwise identical to the
-single-threaded output. Use `-DSVSLICER_TEST_THREADS=<n>` and
+single-threaded output. Additional checks cover invalid velocity component
+counts, four-component velocities, single-point centerlines, and OpenMP thread
+limits. Use `-DSVSLICER_TEST_THREADS=<n>` and
 `-DSVSLICER_TEST_REPEATS=<n>` to change the thread count and repeats, or
 `-DSVSLICER_BUILD_TESTS=OFF` to skip building the test.
 

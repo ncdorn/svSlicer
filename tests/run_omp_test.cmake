@@ -27,11 +27,13 @@ function(run_checked)
         message("${output}")
         message(FATAL_ERROR "Command failed (${result}): ${ARGN}")
     endif()
+    set(COMMAND_OUTPUT "${output}" PARENT_SCOPE)
 endfunction()
 
 function(run_svslicer threads output_file)
     set(ENV{OMP_NUM_THREADS} ${threads})
     run_checked("${SVSLICER}" "${RESULT}" "${CENTERLINE}" "${output_file}")
+    set(SVSLICER_OUTPUT "${COMMAND_OUTPUT}" PARENT_SCOPE)
     run_checked("${TEST_UTILS}" check-analytic "${output_file}")
 endfunction()
 
@@ -48,3 +50,12 @@ endforeach()
 
 message(STATUS "${REPEATS} runs with ${THREADS} threads are identical to the "
                "single-threaded run and match the analytic solution")
+
+# A runtime thread limit must reduce the number of grid copies as well.
+set(ENV{OMP_THREAD_LIMIT} 1)
+set(LIMITED "${WORK_DIR}/out_limited.vtp")
+run_svslicer(8 "${LIMITED}")
+if(NOT SVSLICER_OUTPUT MATCHES "Using 1 thread\\(s\\)")
+    message(FATAL_ERROR "Expected one participating thread:\n${SVSLICER_OUTPUT}")
+endif()
+run_checked("${TEST_UTILS}" compare "${REFERENCE}" "${LIMITED}")
