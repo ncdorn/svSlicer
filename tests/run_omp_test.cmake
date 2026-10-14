@@ -38,6 +38,7 @@ function(run_svslicer threads output_file)
 endfunction()
 
 run_checked("${TEST_UTILS}" make-case "${RESULT}" "${CENTERLINE}")
+message(STATUS "${COMMAND_OUTPUT}")
 
 set(REFERENCE "${WORK_DIR}/out_omp1.vtp")
 run_svslicer(1 "${REFERENCE}")

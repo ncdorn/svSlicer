@@ -20,15 +20,19 @@
 #include <vtkPointData.h>
 #include <vtkPoints.h>
 #include <vtkPolyData.h>
+#include <vtkSMPTools.h>
 #include <vtkSmartPointer.h>
 #include <vtkUnstructuredGrid.h>
+#include <vtkVersion.h>
 #include <vtkXMLPolyDataReader.h>
 #include <vtkXMLPolyDataWriter.h>
 #include <vtkXMLUnstructuredGridWriter.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <initializer_list>
+#include <iomanip>
 #include <iostream>
 #include <string>
 
@@ -185,6 +189,12 @@ int make_case(const std::string& result_file,
     cl_writer->SetInputData(centerline);
     if (!cl_writer->Write()) return EXIT_FAILURE;
 
+    std::cout << "VTK " << vtkVersion::GetVTKVersion()
+#if VTK_MAJOR_VERSION >= 9
+              << ", SMP backend " << vtkSMPTools::GetBackend()
+#endif
+              << ", " << vtkSMPTools::GetEstimatedNumberOfThreads()
+              << " SMP thread(s)" << std::endl;
     std::cout << "Wrote " << grid->GetNumberOfCells() << " tetrahedra and "
               << centerline->GetNumberOfPoints() << " centerline points"
               << std::endl;
@@ -270,6 +280,7 @@ int compare(const std::string& reference_file, const std::string& output_file)
 
     // Results must be bitwise identical to the reference.
     int num_failed = 0;
+    double max_rel_diff = 0.0;
     for (auto name : {"Velocity", "Pressure"})
     {
         auto ref = reference->GetPointData()->GetArray(name);
@@ -280,13 +291,19 @@ int compare(const std::string& reference_file, const std::string& output_file)
             reference->GetPoint(i, a);
             output->GetPoint(i, b);
             bool same_point = a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
-            if (!same_point || ref->GetTuple1(i) != out->GetTuple1(i))
+            double r = ref->GetTuple1(i);
+            double o = out->GetTuple1(i);
+            if (!same_point || r != o)
             {
+                double rel_diff =
+                    std::abs(o - r) / std::max(std::abs(r), 1e-300);
+                max_rel_diff = std::max(max_rel_diff, rel_diff);
                 if (num_failed < 10)
                 {
-                    std::cerr << name << " at point " << i << ": "
-                              << ref->GetTuple1(i) << " (reference) vs "
-                              << out->GetTuple1(i) << std::endl;
+                    std::cerr << std::setprecision(17) << name << " at point "
+                              << i << ": " << r << " (reference) vs " << o
+                              << " (relative difference " << rel_diff << ")"
+                              << std::endl;
                 }
                 num_failed++;
             }
@@ -295,7 +312,8 @@ int compare(const std::string& reference_file, const std::string& output_file)
     if (num_failed)
     {
         std::cerr << "ERROR: '" << output_file << "' differs from '"
-                  << reference_file << "' in " << num_failed << " values"
+                  << reference_file << "' in " << num_failed
+                  << " values (max relative difference " << max_rel_diff << ")"
                   << std::endl;
         return EXIT_FAILURE;
     }

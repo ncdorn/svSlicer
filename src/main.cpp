@@ -12,6 +12,7 @@
 #include <vtkPlane.h>
 #include <vtkPointData.h>
 #include <vtkPolyDataConnectivityFilter.h>
+#include <vtkSMPTools.h>
 #include <vtkTriangle.h>
 #include <vtkUnstructuredGrid.h>
 #include <vtkXMLPolyDataReader.h>
@@ -432,6 +433,13 @@ int main(int argc, char* argv[])
     // enough, because it shares the points and point data arrays.
     int num_threads =
         std::max(1, std::min(omp_get_max_threads(), num_centerline_points));
+
+    // The slices are processed in parallel by OpenMP, so keep VTK's own SMP
+    // backend (TBB or std::thread in some VTK 9 builds) single-threaded.
+    // Inside each cut its threads would oversubscribe the cores, and its
+    // thread-local merging makes the order of the slice triangles, and with
+    // it the floating-point sums, depend on thread scheduling.
+    vtkSMPTools::Initialize(1);
     std::vector<vtkSmartPointer<vtkUnstructuredGrid>> thread_grids;
 
     // Start parallel extraction
