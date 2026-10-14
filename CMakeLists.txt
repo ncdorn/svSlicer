@@ -48,26 +48,24 @@ endif()
 
 find_package(OpenMP REQUIRED)
 
-# Locate VTK first without components to learn its version: VTK < 9 prefixes
-# module names with "vtk" and uses VTK_USE_FILE instead of
-# vtk_module_autoinit.
-find_package(VTK REQUIRED)
-if(VTK_VERSION VERSION_LESS "8.90")
+# VTK 9 requires the used modules to be requested explicitly, otherwise
+# VTK_LIBRARIES is left empty and neither the headers nor the module autoinit
+# are wired up. Never search for VTK without components: VTK 9 then loads all
+# installed modules and their dependencies (e.g. MPI, which needs the C
+# language). An older VTK fails the version check without loading any
+# modules, and is then requested with its "vtk"-prefixed module names.
+find_package(VTK 9 QUIET COMPONENTS
+    CommonCore
+    CommonDataModel
+    FiltersCore
+    IOXML)
+if(NOT VTK_FOUND)
     find_package(VTK REQUIRED COMPONENTS
         vtkCommonCore
         vtkCommonDataModel
         vtkFiltersCore
         vtkIOXML)
     include(${VTK_USE_FILE})
-else()
-    # VTK 9 requires the used modules to be requested explicitly, otherwise
-    # VTK_LIBRARIES is left empty and neither the headers nor the module
-    # autoinit are wired up.
-    find_package(VTK REQUIRED COMPONENTS
-        CommonCore
-        CommonDataModel
-        FiltersCore
-        IOXML)
 endif()
 message(STATUS "Using VTK ${VTK_VERSION}")
 
