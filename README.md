@@ -16,7 +16,7 @@ https://github.com/lucapegolotti/cardiovascular/tree/master/slice-vtu-results-ce
 ### Dependencies
 
 VTK is required for svSlicer. You can either install it with a package
-manager (e.g. `brew install vtk` on macOS, `apt install libvtk9-dev` on Ubuntu) or build it using:
+manager (e.g. `brew install vtk` on macOS, `apt install libvtk9-dev` on Debian) or build it using:
 
 ```
 mkdir -p ./vtk/src
@@ -44,6 +44,12 @@ cmake --install .
 
 > For macOS, the OpenMP runtime is required. It can be installed using
 > `brew install libomp` (the build picks it up automatically via Homebrew).
+
+> The `libvtk9-dev` package of Ubuntu 24.04 cannot read VTK XML files with raw
+> appended data since a libexpat security update
+> ([Launchpad bug 2058415](https://bugs.launchpad.net/ubuntu/+source/paraview/+bug/2058415)).
+> Use Debian's `libvtk9-dev` (bookworm or later), Homebrew, or a VTK built from
+> source instead.
 
 ## Run
 
