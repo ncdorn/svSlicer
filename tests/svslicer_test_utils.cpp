@@ -144,6 +144,9 @@ int make_case(const std::string& result_file,
 
     auto grid_writer = vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
     grid_writer->SetFileName(result_file.c_str());
+    // Base64-encode the data: the VTK 9.1 XML reader shipped with Ubuntu
+    // 24.04 fails on large raw appended data with expat >= 2.6.
+    grid_writer->SetDataModeToBinary();
     grid_writer->SetInputData(grid);
     if (!grid_writer->Write()) return EXIT_FAILURE;
 
@@ -178,6 +181,7 @@ int make_case(const std::string& result_file,
 
     auto cl_writer = vtkSmartPointer<vtkXMLPolyDataWriter>::New();
     cl_writer->SetFileName(centerline_file.c_str());
+    cl_writer->SetDataModeToBinary();
     cl_writer->SetInputData(centerline);
     if (!cl_writer->Write()) return EXIT_FAILURE;
 
